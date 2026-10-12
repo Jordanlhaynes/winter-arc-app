@@ -17,6 +17,8 @@ async function deviceUnprotected() {
 type LockState = {
   enabled: boolean;
   locked: boolean;
+  initialized: boolean;
+  initError: string | null;
   init: () => Promise<void>;
   /** Called when the app goes to the background. */
   lockIfEnabled: () => void;
@@ -36,24 +38,32 @@ async function authenticate(promptMessage: string) {
  */
 export function unlessLocked<A extends unknown[]>(fn: (...args: A) => void): (...args: A) => void {
   return (...args) => {
-    if (!useLockStore.getState().locked) fn(...args);
+    const state = useLockStore.getState();
+    if (state.initialized && !state.locked) fn(...args);
   };
 }
 
 export const useLockStore = create<LockState>((set, get) => ({
   enabled: false,
-  locked: false,
+  locked: true,
+  initialized: false,
+  initError: null,
 
   init: async () => {
-    const enabled = (await SecureStore.getItemAsync(KEY)) === '1';
-    // The passcode can be removed in system settings after the lock was turned on; the stored flag survives
-    // that. Locking then would trap the user behind a prompt that can never succeed, so drop the lock instead.
-    if (enabled && (await deviceUnprotected())) {
-      await SecureStore.setItemAsync(KEY, '0');
-      set({ enabled: false, locked: false });
-      return;
+    set({ initialized: false, initError: null, locked: true });
+    try {
+      const enabled = (await SecureStore.getItemAsync(KEY)) === '1';
+      // Removing the device passcode also removes the means to unlock.
+      if (enabled && (await deviceUnprotected())) {
+        await SecureStore.setItemAsync(KEY, '0');
+        set({ enabled: false, locked: false, initialized: true });
+        return;
+      }
+      set({ enabled, locked: enabled, initialized: true });
+    } catch {
+      // Do not render private content when the persisted lock setting is unknown.
+      set({ initError: 'Could not check the app lock. Try again.', initialized: false, locked: true });
     }
-    set({ enabled, locked: enabled });
   },
 
   lockIfEnabled: () => {

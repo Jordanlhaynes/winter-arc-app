@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useAuthStore } from '@/state/authStore';
 import { useJournalStore } from '@/state/journalStore';
 import { Note } from '@/sync/journal';
 import { Button, Card, ErrorText, SectionLabel } from '@/ui/components';
@@ -12,6 +13,11 @@ function formatTime(iso: string) {
 }
 
 export default function Notes() {
+  const userId = useAuthStore((s) => s.session?.user.id ?? null);
+  return <NotesEditor key={userId ?? 'signed-out'} />;
+}
+
+function NotesEditor() {
   const notes = useJournalStore((s) => s.notes);
   const error = useJournalStore((s) => s.error);
   const saveNote = useJournalStore((s) => s.saveNote);

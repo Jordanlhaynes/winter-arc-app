@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { migrate } from '@/db/client';
 import * as repo from '@/db/repo';
 import { isDayEditable, toDateString } from '@/engine/dates';
-import { ArcScore, computeArc, PillarType } from '@/engine/scoring';
+import { ArcScore, computeArc, PillarType, recoveryDayFor } from '@/engine/scoring';
 import { cancelScheduledBackup, scheduleBackup } from '@/sync/backup';
 
 type ArcState = {
@@ -78,10 +78,11 @@ export const useArcStore = create<ArcState>((set, get) => {
     },
 
     makeUp: (pillar, forDay) => {
-      write((id) => {
-        const today = computeArc(get().data!.log, new Date()).currentDay;
-        repo.addRecovery(id, pillar, today, forDay);
-      });
+      const data = get().data;
+      if (!data) return;
+      const day = recoveryDayFor(data.cycle.startDate, new Date());
+      if (day === null) return;
+      write((id) => repo.addRecovery(id, pillar, day, forDay));
     },
 
     editTask: (pillar, day, title) => {

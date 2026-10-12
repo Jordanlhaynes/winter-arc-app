@@ -4,6 +4,7 @@ import { CYCLE_LENGTH, isDayEditable } from '@/engine/dates';
 import { nextPhase, progressToNext } from '@/engine/phases';
 import { ArcScore, PILLARS, PillarType } from '@/engine/scoring';
 import { backlogFor, taskFor, useArcStore, useScore } from '@/state/arcStore';
+import { unlessLocked } from '@/state/lockStore';
 import { CoachCard } from '@/ui/CoachCard';
 import { Button, Card, ProgressBar, Screen, SectionLabel } from '@/ui/components';
 import { PhaseAvatar } from '@/ui/PhaseAvatar';
@@ -149,7 +150,7 @@ function MakeUpCard({ pillars, score }: { pillars: PillarType[]; score: ArcScore
                 onPress={() =>
                   Alert.alert('Log make-up task?', title, [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Yes, done', onPress: () => makeUp(p, forDay) },
+                    { text: 'Yes, done', onPress: unlessLocked(() => makeUp(p, forDay)) },
                   ])
                 }
               />
@@ -188,7 +189,7 @@ function SkipButton({ day, score }: { day: number; score: ArcScore }) {
             (doneToday > 0 ? `\n\nThe ${doneToday} task(s) you completed today won't count.` : ''),
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Skip today', onPress: () => setSkip(day, true) },
+            { text: 'Skip today', onPress: unlessLocked(() => setSkip(day, true)) },
           ],
         )
       }
@@ -227,7 +228,7 @@ function ArcComplete({ score }: { score: ArcScore }) {
         onPress={() =>
           Alert.alert('Start a new Arc?', 'Your avatar resets to Phase 1. This Arc is saved in your history.', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Start', onPress: finishArc },
+            { text: 'Start', onPress: unlessLocked(finishArc) },
           ])
         }
       />

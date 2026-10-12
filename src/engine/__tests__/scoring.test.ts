@@ -1,6 +1,6 @@
 import { dayNumberFor, isDayEditable, isDayLocked } from '../dates';
 import { PHASES, phaseFor, progressToNext } from '../phases';
-import { ArcLog, computeArc, PillarType } from '../scoring';
+import { ArcLog, computeArc, PillarType, recoveryDayFor } from '../scoring';
 
 const START = '2026-01-01';
 
@@ -196,5 +196,20 @@ describe('day summaries', () => {
       'pending',
       'future',
     ]);
+  });
+});
+
+describe('final recovery grace period', () => {
+  it('credits a morning make-up to day 100 and preserves the point after the Arc closes', () => {
+    const day = recoveryDayFor(START, at(101, 11));
+    expect(day).toBe(100);
+    const facts = log({ completions: done('physical', 1), recoveries: done('physical', day!) });
+    expect(computeArc(facts, at(101, 11)).pillars.physical.recovered).toBe(1);
+    expect(computeArc(facts, at(101, 12)).pillars.physical.recovered).toBe(1);
+  });
+
+  it('rejects new recovery at the final cutoff and before the Arc begins', () => {
+    expect(recoveryDayFor(START, at(101, 12))).toBeNull();
+    expect(recoveryDayFor(START, new Date(2025, 11, 31, 12))).toBeNull();
   });
 });

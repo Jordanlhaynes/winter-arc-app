@@ -12,6 +12,8 @@ import { colors } from './theme';
 export function JournalGate({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   const authStatus = useAuthStore((s) => s.status);
   const status = useJournalStore((s) => s.status);
+  const ownerId = useJournalStore((s) => s.userId);
+  const userId = useAuthStore((s) => s.session?.user.id ?? null);
   const error = useJournalStore((s) => s.error);
   const reload = useJournalStore((s) => s.reload);
 
@@ -35,7 +37,7 @@ export function JournalGate({ title, subtitle, children }: { title: string; subt
     );
   }
 
-  if (status === 'error') {
+  if (status === 'error' && ownerId === userId) {
     return (
       <Screen title={title} subtitle={subtitle}>
         <Card>
@@ -48,7 +50,7 @@ export function JournalGate({ title, subtitle, children }: { title: string; subt
 
   return (
     <Screen title={title} subtitle={subtitle}>
-      {status === 'ready' ? children : <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />}
+      {status === 'ready' && ownerId === userId ? children : <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />}
     </Screen>
   );
 }

@@ -8,6 +8,7 @@ import { Change, LogEntry, Note } from '@/sync/journal';
 import { useAuthStore } from './authStore';
 
 type JournalState = {
+  userId: string | null;
   status: 'idle' | 'loading' | 'ready' | 'error';
   error: string | null;
   notes: Note[];
@@ -42,19 +43,20 @@ export function applyChange<T extends { id: string }>(list: T[], change: Change<
 const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.');
 
 export const useJournalStore = create<JournalState>((set, get) => {
+  /** Invalidates every outstanding fetch, mutation and subscription on an account change. */
+  let session = 0;
   /** A user action: clear the previous error first so an old message doesn't outlive a later success. */
-  const mutate = async <R>(fn: () => Promise<R>): Promise<R> => {
+  const mutate = async <R>(fn: (mySession: number) => Promise<R>): Promise<R> => {
+    const mySession = session;
     set({ error: null });
     try {
-      return await fn();
+      return await fn(mySession);
     } catch (e) {
-      set({ error: message(e) });
+      if (mySession === session) set({ error: message(e) });
       throw e;
     }
   };
 
-  /** Bumped by start() and stop(), so a fetch that lands after sign-out can't repopulate the store. */
-  let session = 0;
   /**
    * While a reload's queries are out, every change (Realtime or our own write) queues here and replays on top
    * of the snapshot, which predates it. Each applier reads the current state when it runs, so order is safe.
@@ -63,9 +65,12 @@ export const useJournalStore = create<JournalState>((set, get) => {
   let inFlight: Promise<void> | null = null;
   let again = false;
 
-  const applyNow = (fn: () => void) => {
-    if (pending) pending.push(fn);
-    else fn();
+  const applyNow = (fn: () => void, mySession: number) => {
+    const apply = () => {
+      if (mySession === session) fn();
+    };
+    if (pending) pending.push(apply);
+    else apply();
   };
 
   const fetchOnce = async (mySession: number) => {
@@ -93,6 +98,7 @@ export const useJournalStore = create<JournalState>((set, get) => {
   };
 
   return {
+    userId: null,
     status: 'idle',
     error: null,
     notes: [],
@@ -100,7 +106,7 @@ export const useJournalStore = create<JournalState>((set, get) => {
 
     start: (userId) => {
       const mySession = ++session;
-      set({ status: 'loading', error: null });
+      set({ userId, status: 'loading', error: null, notes: [], log: [] });
       let unsubscribe: (() => void) | null = null;
       let retry: ReturnType<typeof setTimeout> | undefined;
       let backoff = 1000;
@@ -110,15 +116,15 @@ export const useJournalStore = create<JournalState>((set, get) => {
           .reload()
           .catch(() => {
             // A failed refetch keeps showing what we have; only the first load can fail the screen.
-            if (get().status !== 'ready') set({ status: 'error' });
+            if (mySession === session && get().status !== 'ready') set({ status: 'error' });
           });
       };
 
       const connect = () => {
         unsubscribe = journal.subscribe(
           userId,
-          (c) => applyNow(() => set({ notes: applyChange(get().notes, c, 'updated_at') })),
-          (c) => applyNow(() => set({ log: applyChange(get().log, c, 'created_at') })),
+          (c) => applyNow(() => set({ notes: applyChange(get().notes, c, 'updated_at') }), mySession),
+          (c) => applyNow(() => set({ log: applyChange(get().log, c, 'created_at') }), mySession),
           (status) => {
             if (mySession !== session) return;
             if (status === 'SUBSCRIBED') {
@@ -143,11 +149,12 @@ export const useJournalStore = create<JournalState>((set, get) => {
       connect();
 
       return () => {
-        session++;
         clearTimeout(retry);
         unsubscribe?.();
+        if (mySession !== session) return;
+        session++;
         pending = null;
-        set({ status: 'idle', notes: [], log: [] });
+        set({ userId: null, status: 'idle', notes: [], log: [], error: null });
       };
     },
 
@@ -181,37 +188,38 @@ export const useJournalStore = create<JournalState>((set, get) => {
     },
 
     saveNote: (id, title, body) =>
-      mutate(async () => {
+      mutate(async (mySession) => {
         try {
           const note = id ? await journal.updateNote(id, title, body) : await journal.createNote(title, body);
+          if (mySession !== session) return note;
           // Deleted elsewhere while our update was out: the row is gone server-side, don't resurrect it here.
           if (id && !get().notes.some((n) => n.id === id)) throw new Error(journal.NOTE_GONE);
-          applyNow(() => set({ notes: upsert(get().notes, note, 'updated_at') }));
+          applyNow(() => set({ notes: upsert(get().notes, note, 'updated_at') }), mySession);
           return note;
         } catch (e) {
           if (id && e instanceof Error && e.message === journal.NOTE_GONE) {
-            applyNow(() => set({ notes: get().notes.filter((n) => n.id !== id) }));
+            applyNow(() => set({ notes: get().notes.filter((n) => n.id !== id) }), mySession);
           }
           throw e;
         }
       }),
 
     deleteNote: (id) =>
-      mutate(async () => {
+      mutate(async (mySession) => {
         await journal.deleteRow('notes', id);
-        applyNow(() => set({ notes: get().notes.filter((n) => n.id !== id) }));
+        applyNow(() => set({ notes: get().notes.filter((n) => n.id !== id) }), mySession);
       }),
 
     addLog: (body) =>
-      mutate(async () => {
+      mutate(async (mySession) => {
         const entry = await journal.addLogEntry(body);
-        applyNow(() => set({ log: upsert(get().log, entry, 'created_at') }));
+        applyNow(() => set({ log: upsert(get().log, entry, 'created_at') }), mySession);
       }),
 
     deleteLog: (id) =>
-      mutate(async () => {
+      mutate(async (mySession) => {
         await journal.deleteRow('log_entries', id);
-        applyNow(() => set({ log: get().log.filter((e) => e.id !== id) }));
+        applyNow(() => set({ log: get().log.filter((e) => e.id !== id) }), mySession);
       }),
   };
 });

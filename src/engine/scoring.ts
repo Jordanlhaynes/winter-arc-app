@@ -13,7 +13,7 @@ export type ArcLog = {
   startDate: string;
   completions: { pillar: PillarType; day: number }[];
   skips: number[];
-  /** Make-up work (backlogged or bonus task). `day` is the day it was performed. */
+  /** Arc day credited for make-up work; the final morning grace period credits day 100. */
   recoveries: { pillar: PillarType; day: number }[];
 };
 
@@ -55,6 +55,13 @@ export type ArcScore = {
   /** The next repeat miss would drop the avatar a phase. */
   demotionRisk: boolean;
 };
+
+/** The final morning keeps day 100 editable; recovery must still be credited inside the 100-day score. */
+export function recoveryDayFor(startDate: string, now: Date): number | null {
+  const day = dayNumberFor(startDate, now);
+  if (day < 1 || isDayLocked(startDate, CYCLE_LENGTH, now)) return null;
+  return Math.min(CYCLE_LENGTH, day);
+}
 
 export function computeArc(log: ArcLog, now: Date): ArcScore {
   const currentDay = dayNumberFor(log.startDate, now);

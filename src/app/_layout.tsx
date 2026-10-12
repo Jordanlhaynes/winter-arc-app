@@ -1,12 +1,13 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, Text, View } from 'react-native';
 import { FullWindowOverlay } from 'react-native-screens';
 
 import { useArcStore } from '@/state/arcStore';
 import { useAuthStore } from '@/state/authStore';
 import { useLockStore } from '@/state/lockStore';
+import { Button } from '@/ui/components';
 import { LockScreen } from '@/ui/LockScreen';
 import { colors } from '@/ui/theme';
 
@@ -15,6 +16,8 @@ export default function RootLayout() {
   const init = useArcStore((s) => s.init);
   const tick = useArcStore((s) => s.tick);
   const locked = useLockStore((s) => s.locked);
+  const lockInitialized = useLockStore((s) => s.initialized);
+  const lockError = useLockStore((s) => s.initError);
 
   useEffect(() => {
     init();
@@ -44,10 +47,17 @@ export default function RootLayout() {
     };
   }, [tick]);
 
-  if (!loaded) {
+  if (!loaded || !lockInitialized) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center' }}>
-        <ActivityIndicator color={colors.accent} />
+        {lockError ? (
+          <View style={{ padding: 32, gap: 16 }}>
+            <Text style={{ color: colors.text }}>{lockError}</Text>
+            <Button label="Try again" onPress={() => void useLockStore.getState().init()} />
+          </View>
+        ) : (
+          <ActivityIndicator color={colors.accent} />
+        )}
       </View>
     );
   }
