@@ -1,7 +1,7 @@
-# Manual phone test checklist
+# Manual iPhone test checklist
 
-Run on a development build (EAS `development` profile or `npx expo run:ios|android`), not Expo Go. Face ID and
-SQLite encryption need native modules that Expo Go does not ship. Use a real phone with Face ID / fingerprint
+Run on a development build (EAS `development` profile or `npx expo run:ios`), not Expo Go. Face ID and
+SQLite encryption need native modules that Expo Go does not ship. Use a real iPhone with Face ID / Touch ID
 and a passcode set, plus an authenticator app (Google Authenticator, Microsoft Authenticator or iPhone Passwords).
 
 Tick each line only after you saw the stated result. If a step fails, note the phone, OS version and the exact
@@ -24,16 +24,14 @@ Turn the lock on first: Settings > Privacy > App lock.
 | 1.2 | Press home. Reopen the app. | Lock screen shows (icon, "Winter Arc is locked", Unlock). Biometric prompt appears on its own once. After success the app is where you left it. |
 | 1.3 | Repeat 1.2 but cancel the biometric prompt. | Lock screen stays. No second prompt appears by itself. Tap Unlock: prompt again. Success unlocks. |
 | 1.4 | Kill the app from the app switcher. Cold start. | Lock screen first, prompt appears once. No flash of Today / notes content before the lock screen. |
-| 1.5 | Open Settings > Sign in (account sheet). With the sheet open press home, then return. | Lock screen covers the sheet (iOS and Android). After unlocking, the sheet is still open with the email you typed. |
+| 1.5 | Open Settings > Sign in (account sheet). With the sheet open press home, then return. | Lock screen covers the sheet. After unlocking, the sheet is still open with the email you typed. |
 | 1.6 | On the 2-factor sheet tap "Open authenticator app", read a code, switch back. | Lock screen, prompt, unlock. The 2-factor sheet is still open with the setup key and code field. Enter the code: verifies. |
 | 1.7 | Open the Erase alert in Settings, press home, return and cancel the biometric prompt so the app stays locked. Tap Erase in the alert (it floats above the lock on iOS). | Nothing is erased. Unlock, check Today still has your data. |
 | 1.8 | Type in a note, press home, return. | Keyboard is down under the lock screen. Nothing typed while locked reaches the note. |
 | 1.9 | Lock on. In system settings remove the passcode (and so biometrics). Reopen the app. | No lock screen, no prompt. Settings shows App lock off. Re-add the passcode later. |
-| 1.10 | Android only: at the biometric prompt tap "Use PIN" (or pattern), enter it. | Unlocks with exactly one prompt sequence. Cancel the PIN screen instead: lock screen stays, no automatic re-prompt. |
-| 1.11 | Android only: lock the app, press the hardware back button. | Lock screen stays or the app exits. It never shows app content. |
-| 1.12 | Toggle App lock off. | Prompt "Turn off app lock". Success: switch off, backgrounding no longer locks. Cancel: switch stays on. |
-| 1.13 | iOS only: lock on, background the app, open the app switcher without reopening. | Known trade-off: the switcher snapshot may show the last screen. The lock engages on background, not on the switcher. |
-| 1.14 | Deep link while locked (iOS): lock the app, open `winterarc://account` from Notes. | Lock screen or lock-styled sheet; no sign-in form usable before unlocking. |
+| 1.10 | Toggle App lock off. | Prompt "Turn off app lock". Success: switch off, backgrounding no longer locks. Cancel: switch stays on. |
+| 1.11 | iOS only: lock on, background the app, open the app switcher without reopening. | Known trade-off: the switcher snapshot may show the last screen. The lock engages on background, not on the switcher. |
+| 1.12 | Deep link while locked (iOS): lock the app, open `winterarc://account` from Notes. | Lock screen or lock-styled sheet; no sign-in form usable before unlocking. |
 
 ## 2. Account and 2-factor
 

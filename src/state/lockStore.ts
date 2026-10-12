@@ -1,14 +1,11 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
-import { Keyboard, Platform } from 'react-native';
+import { Keyboard } from 'react-native';
 import { create } from 'zustand';
 
 const KEY = 'appLockEnabled';
 
-const NOTHING_TO_UNLOCK_WITH = Platform.select({
-  ios: 'Set up Face ID, Touch ID or a passcode on this iPhone first.',
-  default: 'Set up a screen lock (fingerprint, face unlock, PIN or pattern) on this phone first.',
-});
+const NOTHING_TO_UNLOCK_WITH = 'Set up Face ID, Touch ID or a passcode on this iPhone first.';
 
 let unlocking: Promise<boolean> | null = null;
 
@@ -68,7 +65,7 @@ export const useLockStore = create<LockState>((set, get) => ({
 
   unlock: () => {
     // One prompt at a time: the lock screen's mount effect, the foreground handler and the Unlock button can
-    // all ask, and overlapping native prompts either stack (iOS) or cancel each other (Android).
+    // all ask, and overlapping native prompts can stack on iOS.
     if (unlocking) return unlocking;
     unlocking = (async () => {
       try {

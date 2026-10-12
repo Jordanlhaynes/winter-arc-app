@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, AppState, Platform, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { FullWindowOverlay } from 'react-native-screens';
 
 import { useArcStore } from '@/state/arcStore';
@@ -63,17 +63,12 @@ export default function RootLayout() {
         The account and mfa sheets are presented above the root view on iOS, where a plain overlay (or a root
         <Modal>, which UIKit refuses while a sheet is up) can't cover them. FullWindowOverlay lives at the
         UIWindow level, above presented controllers, so the sheet stays mounted (2-factor needs the user to
-        switch to their authenticator mid-flow) and is simply covered. Android keeps modal screens in the same
-        view hierarchy, so the sibling overlay is enough there. Alerts still float above either: see unlessLocked.
+        switch to their authenticator mid-flow) and is simply covered. Alerts still float above it: see unlessLocked.
       */}
       {locked ? (
-        Platform.OS === 'ios' ? (
-          <FullWindowOverlay>
-            <LockScreen />
-          </FullWindowOverlay>
-        ) : (
+        <FullWindowOverlay>
           <LockScreen />
-        )
+        </FullWindowOverlay>
       ) : null}
     </>
   );

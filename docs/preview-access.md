@@ -2,9 +2,9 @@
 
 Review date: October 11, 2026 (America/New_York).
 Source reviewed: `9bbd5e6ccf340f247c85f0672ac1d10bde66318e` on `main-wiua0b`.
-The app source matches `main`; the second branch adds the manual phone test checklist.
+The reviewed app source matches `main`; the second branch added the manual phone test checklist. The review branch now removes Android support at the user's request; iPhone and web are the supported platforms.
 
-**Release verdict: hold.** Source review found backup data-loss and account/privacy issues. Automated validation is being set up; successful bundling alone would not clear these findings.
+**Release verdict: hold.** Source review found backup data-loss and account/privacy issues. Typecheck, lint, Jest and web/iOS bundle exports passed on the original review branch (5dabfa1); successful bundling alone does not clear these findings. The Android removal is being checked separately.
 
 ## Logins
 
@@ -39,9 +39,9 @@ The Expo dashboard and Supabase console are management links, not app previews.
 2. Supply the app build's public Supabase URL and publishable/anon key through the deployment environment. The committed .env.example has placeholders only; this does not prove Claude's local environment is missing.
 3. Fix the release findings in release-review.md and run the repository checks.
 4. For web, export the web companion and deploy a preview, then verify sign-in, TOTP, notes/log sync and password reset in a browser.
-5. For mobile, configure an EAS development/preview build and obtain its install link. A browser at phone width does not test native SQLite, biometric lock or background behavior. Face ID needs a native development build.
-6. Complete docs/manual-test-checklist.md on an actual supported phone, using test data for backup/restore/erase checks.
+5. For iPhone, configure an EAS development/preview build and obtain its install link. A browser at phone width does not test native SQLite, biometric lock or background behavior. Face ID needs a native development build.
+6. Complete docs/manual-test-checklist.md on an actual iPhone, using test data for backup/restore/erase checks.
 
 ## Validation limits
 
-Local command and browser tools failed to start during this review. No local lint, typecheck, tests, web server or native preview were run. GitHub checks will report their actual results separately. No production app release is authorized by this report.
+Local command and browser tools failed to start during this review. No local lint, typecheck, tests, web server or native preview were run. [The first hosted validation run](https://github.com/Jordanlhaynes/winter-arc-app/actions/runs/38195307330) passed typecheck, lint, Jest and web/iOS exports. This verifies JavaScript/assets, not native signing or live login. Subsequent checks cover the iPhone/web cleanup. The app remains uncleared for release.
