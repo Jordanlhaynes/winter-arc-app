@@ -11,7 +11,8 @@ import { supabase } from '@/sync/supabase';
  */
 export type AuthStatus = 'unavailable' | 'signedOut' | 'needsMfaSetup' | 'needsMfaCode' | 'ready';
 
-type Enrollment = { factorId: string; secret: string; uri: string };
+/** qrCode is an SVG data URI of the same authenticator link, for scanning from another device (web). */
+type Enrollment = { factorId: string; secret: string; uri: string; qrCode: string };
 
 type AuthState = {
   status: AuthStatus;
@@ -129,7 +130,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       friendlyName: `Winter Arc ${Date.now()}`,
     });
     fail(error);
-    return { factorId: data!.id, secret: data!.totp.secret, uri: data!.totp.uri };
+    return { factorId: data!.id, secret: data!.totp.secret, uri: data!.totp.uri, qrCode: data!.totp.qr_code };
   },
 
   verifyCode: async (factorId, code) => {
