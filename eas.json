@@ -1,0 +1,13 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    }
+  }
+}

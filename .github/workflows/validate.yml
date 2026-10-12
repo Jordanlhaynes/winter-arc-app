@@ -1,0 +1,44 @@
+name: Validate Winter Arc
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
+  pull_request:
+    paths-ignore: ['docs/**', '**/*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - id: install
+        run: npm ci
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint
+      - name: Unit tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm test -- --runInBand
+      - name: Web bundle
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx --no-install expo export --platform web --output-dir dist-web
+      - name: iOS bundle
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx --no-install expo export --platform ios --output-dir dist-ios

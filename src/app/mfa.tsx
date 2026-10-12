@@ -6,7 +6,14 @@ import * as repo from '@/db/repo';
 import { useArcStore } from '@/state/arcStore';
 import { useAuthStore } from '@/state/authStore';
 import { unlessLocked } from '@/state/lockStore';
-import { latestBackup, pauseAutoBackup, restoreLatest, resumeAutoBackup, scheduleBackup } from '@/sync/backup';
+import {
+  beginBackupReconciliation,
+  isAutoBackupPaused,
+  reconcileBackup,
+  restoreLatest,
+  resumeAutoBackup,
+  scheduleBackup,
+} from '@/sync/backup';
 import { Button, Card, ErrorText, Field, Screen } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
@@ -37,7 +44,12 @@ export default function Mfa() {
 
   /** After 2-factor succeeds: pull an existing backup onto a fresh phone, otherwise back up this one. */
   const afterVerified = async () => {
-    const backup = await latestBackup().catch(() => null);
+    const accountId = useAuthStore.getState().session?.user.id;
+    const forThisAccount = (fn: () => void) => unlessLocked(() => {
+      if (useAuthStore.getState().session?.user.id === accountId) fn();
+    });
+    const backup = await reconcileBackup();
+    if (useAuthStore.getState().session?.user.id !== accountId) throw new Error('The signed-in account changed. Try again.');
     if (backup && !repo.hasAnyData()) {
       await restoreLatest();
       reloadFromDb();
@@ -45,7 +57,7 @@ export default function Mfa() {
       router.replace('/');
       return;
     }
-    if (!backup) {
+    if (!backup || (repo.hasAnyData() && !isAutoBackupPaused())) {
       scheduleBackup(0);
       router.back();
       return;
@@ -53,14 +65,14 @@ export default function Mfa() {
     // Both this phone and the cloud have data: never overwrite either silently. Automatic backups stay paused
     // until the user answers, so a tap swallowed by the lock (alerts float above it) can't let the phone win by
     // default; Settings then shows both ways out (Back up now / Restore).
-    pauseAutoBackup();
+    beginBackupReconciliation();
     Alert.alert(
       'Which copy should we keep?',
       `You have a cloud backup from ${new Date(backup.updatedAt).toLocaleString()} and data on this phone.`,
       [
         {
           text: 'Keep this phone',
-          onPress: unlessLocked(() => {
+          onPress: forThisAccount(() => {
             resumeAutoBackup();
             scheduleBackup(0);
             router.back();
@@ -69,7 +81,7 @@ export default function Mfa() {
         {
           text: 'Restore cloud backup',
           style: 'destructive',
-          onPress: unlessLocked(() => {
+          onPress: forThisAccount(() => {
             restoreLatest()
               .then(() => {
                 resumeAutoBackup();
@@ -93,6 +105,7 @@ export default function Mfa() {
     if (!/^\d{6}$/.test(code.trim())) return setError('Enter the 6-digit code from your authenticator app.');
     setBusy(true);
     try {
+      beginBackupReconciliation();
       await verifyCode(factorId, code);
       await afterVerified();
     } catch (e) {
@@ -105,7 +118,25 @@ export default function Mfa() {
   if (status === 'ready') {
     return (
       <Screen title="2-factor is on" subtitle="Your account is protected.">
-        <Button label="Done" onPress={() => router.back()} />
+        <ErrorText>{error}</ErrorText>
+        {error ? (
+          <Button
+            label={busy ? 'Checking backup…' : 'Retry backup check'}
+            disabled={busy}
+            onPress={async () => {
+              setError(null);
+              setBusy(true);
+              try {
+                await afterVerified();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not check your cloud backup. Automatic backup stays paused.');
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        <Button label={busy ? 'Checking backup…' : 'Done'} disabled={busy} onPress={() => router.back()} />
       </Screen>
     );
   }

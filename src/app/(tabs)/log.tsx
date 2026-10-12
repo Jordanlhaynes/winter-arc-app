@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { toDateString } from '@/engine/dates';
+import { useAuthStore } from '@/state/authStore';
 import { useJournalStore } from '@/state/journalStore';
 import { LogEntry } from '@/sync/journal';
 import { Button, Card, ErrorText, SectionLabel } from '@/ui/components';
@@ -31,6 +32,11 @@ function groupByDay(entries: LogEntry[]) {
 }
 
 export default function Log() {
+  const userId = useAuthStore((s) => s.session?.user.id ?? null);
+  return <LogEditor key={userId ?? 'signed-out'} />;
+}
+
+function LogEditor() {
   const log = useJournalStore((s) => s.log);
   const error = useJournalStore((s) => s.error);
   const addLog = useJournalStore((s) => s.addLog);

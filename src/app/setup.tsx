@@ -8,8 +8,8 @@ import { PILLARS } from '@/engine/scoring';
 import { useArcStore } from '@/state/arcStore';
 import { useAuthStore } from '@/state/authStore';
 import { unlessLocked } from '@/state/lockStore';
-import { BackupInfo, latestBackup, restoreLatest } from '@/sync/backup';
-import { Button, Card, Screen } from '@/ui/components';
+import { BackupInfo, reconcileBackup, restoreLatest, resumeAutoBackup } from '@/sync/backup';
+import { Button, Card, ErrorText, Screen } from '@/ui/components';
 import { colors, pillarMeta } from '@/ui/theme';
 
 const EMPTY: Goals = { personal: '', physical: '', financial: '', career: '' };
@@ -19,31 +19,50 @@ function formatTime(iso: string) {
 }
 
 export default function Setup() {
+  const status = useAuthStore((s) => s.status);
+  const accountId = useAuthStore((s) => s.session?.user.id ?? 'offline');
+  return <SetupForm key={`${accountId}:${status}`} />;
+}
+
+function SetupForm() {
   const startArc = useArcStore((s) => s.startArc);
   const reloadFromDb = useArcStore((s) => s.reloadFromDb);
   const authStatus = useAuthStore((s) => s.status);
+  const authChecked = useAuthStore((s) => s.checked);
+  const accountId = useAuthStore((s) => s.session?.user.id);
   const cloud = authStatus !== 'unavailable';
   const signedIn = authStatus !== 'unavailable' && authStatus !== 'signedOut';
   const [goals, setGoals] = useState<Goals>(EMPTY);
   const [fetched, setFetched] = useState<BackupInfo>(null);
   const [busy, setBusy] = useState(false);
+  const [backupChecked, setBackupChecked] = useState(false);
+  const [checkedAccountId, setCheckedAccountId] = useState<string | undefined>();
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const ready = PILLARS.every((p) => goals[p].trim().length > 0);
   // This screen is also where you land right after "Erase this phone's data", which keeps the cloud backup;
   // offer it back here, since Settings (the other Restore button) is unreachable without an Arc.
-  const backup = authStatus === 'ready' ? fetched : null;
+  const checkedCurrentAccount = backupChecked && checkedAccountId === accountId;
+  const backup = authStatus === 'ready' && checkedCurrentAccount ? fetched : null;
 
   useEffect(() => {
     if (authStatus !== 'ready') return;
     let cancelled = false;
-    latestBackup()
+    reconcileBackup()
       .then((b) => {
-        if (!cancelled) setFetched(b);
+        if (!cancelled) {
+          setFetched(b);
+          setBackupChecked(true);
+          setCheckedAccountId(accountId);
+        }
       })
-      .catch(() => {});
+      .catch((e: unknown) => {
+        if (!cancelled) setBackupError(e instanceof Error ? e.message : 'Could not check your cloud backup.');
+      });
     return () => {
       cancelled = true;
     };
-  }, [authStatus]);
+  }, [authStatus, accountId, retry]);
 
   const restore = () => {
     if (!backup) return;
@@ -52,6 +71,7 @@ export default function Setup() {
       {
         text: 'Restore',
         onPress: unlessLocked(() => {
+          if (useAuthStore.getState().session?.user.id !== accountId) return;
           setBusy(true);
           restoreLatest()
             .then(() => {
@@ -66,7 +86,10 @@ export default function Setup() {
   };
 
   const start = () => {
+    if (!authChecked || busy || (authStatus === 'ready' && !checkedCurrentAccount)) return;
     const go = () => {
+      if (useAuthStore.getState().session?.user.id !== accountId) return;
+      if (backup) resumeAutoBackup();
       startArc({
         personal: goals.personal.trim(),
         physical: goals.physical.trim(),
@@ -126,7 +149,22 @@ export default function Setup() {
           );
         })}
 
-        <Button label="Start Day 1" icon="snow" onPress={start} disabled={!ready || busy} />
+        <ErrorText>{backupError}</ErrorText>
+        {backupError ? (
+          <Button label="Retry backup check" variant="secondary" onPress={() => {
+            setFetched(null);
+            setBackupChecked(false);
+            setCheckedAccountId(undefined);
+            setBackupError(null);
+            setRetry((v) => v + 1);
+          }} disabled={busy} />
+        ) : null}
+        <Button
+          label={authStatus === 'ready' && !checkedCurrentAccount && !backupError ? 'Checking cloud backup…' : 'Start Day 1'}
+          icon="snow"
+          onPress={start}
+          disabled={!ready || busy || !authChecked || (authStatus === 'ready' && !checkedCurrentAccount)}
+        />
 
         {/* Once signed in with 2-factor the backup card above says it all; before that, point at sign-in / the code. */}
         {cloud && authStatus !== 'ready' ? (

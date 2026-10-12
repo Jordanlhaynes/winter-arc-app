@@ -1,0 +1,84 @@
+# Winter Arc release review
+
+Reviewed source: `9bbd5e6ccf340f247c85f0672ac1d10bde66318e`, October 11, 2026 Eastern.
+Status: **fixes pushed; production release still held pending interactive and native verification**.
+The seven findings below are retained as the original review record. They have been addressed in code on `codex/review-and-preview` and the relevant database fixes are applied.
+
+Validation at app commit `5199d725a11d3167b1bd78913014057985e437b9`: typecheck, lint, 41 Jest tests across four suites, and web/iOS exports passed. [Validation run](https://github.com/Jordanlhaynes/winter-arc-app/actions/runs/38197436916).
+
+Supabase tests for server note timestamps, per-user quota, restricted refunds and owner/MFA policies passed in transactions that were rolled back. The existing backup's timestamp and schema version remain unchanged.
+
+## 1. [P1] Failed or unfinished backup lookup can overwrite the cloud copy
+
+Locations: [src/app/mfa.tsx:40](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/mfa.tsx#L40), [src/app/setup.tsx:35](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/setup.tsx#L35), [src/app/setup.tsx:78](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/setup.tsx#L78).
+
+MFA reconciliation turns any latestBackup error into null, then schedules an immediate upload. If an existing backup lookup fails transiently and the upload succeeds, local data replaces the sole cloud snapshot without the copy-selection prompt. Setup also swallows lookup failures and permits starting an automatically backed-up Arc before the lookup settles.
+
+Reproduce with an existing cloud backup, a different local Arc, and a failed metadata request followed by a working upload. Also test Start Day 1 while metadata is delayed after erasing local data.
+
+Fix: distinguish pending, failed, present and confirmed-absent metadata; pause uploads before reconciliation and preserve both copies until a successful lookup and explicit conflict choice.
+
+## 2. [P1] Pending upload undoes the pause after deleting a cloud backup
+
+Locations: [src/sync/backup.ts:77](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/sync/backup.ts#L77), [src/sync/backup.ts:119](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/sync/backup.ts#L119), [src/sync/backup.ts:158](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/sync/backup.ts#L158).
+
+Delete pauses automatic backups before awaiting the existing upload chain. Every successful backupNow call clears that pause, including automatic uploads. If an upload completes during deletion, deletion finishes with automatic backups internally enabled, while Settings says they remain off. A subsequent edit recreates the deleted backup.
+
+Fix: separate explicit manual-backup resume behavior from automatic uploads and preserve the delete/reconciliation pause while queued work drains.
+
+## 3. [P2] Delayed journal responses can expose a previous account's data
+
+Locations: [src/state/journalStore.ts:120](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/state/journalStore.ts#L120), [src/state/journalStore.ts:183](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/state/journalStore.ts#L183), [src/state/journalStore.ts:205](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/state/journalStore.ts#L205).
+
+Snapshot fetches check session generation, but mutation completions and note/log subscription callbacks do not. Delay account A's new-note or add-log response, sign out and sign into account B, then let A's response complete: its row is inserted into the current visible list.
+
+Fix: capture the authentication generation for writes and subscriptions and guard both immediate and queued state changes, including error callbacks. This is a client-state issue; the inspected server RLS owner/AAL2 checks do not prevent stale client responses.
+
+## 4. [P2] Cold launch exposes content before the app lock is initialized
+
+Locations: [src/app/_layout.tsx:19](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/_layout.tsx#L19), [src/app/_layout.tsx:47](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/_layout.tsx#L47), [src/state/lockStore.ts:47](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/state/lockStore.ts#L47).
+
+Arc loading completes synchronously. Lock settings are read asynchronously while the store defaults to unlocked. Rendering is gated only on Arc loading, so private content can appear before a persisted lock engages. This contradicts phone checklist 1.4.
+
+Fix: gate protected content on completed lock initialization and handle storage/authentication errors without exposing the screen.
+
+## 5. [P2] Today confirmation buttons can change progress while locked
+
+Locations: [src/app/(tabs)/today.tsx:152](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/%28tabs%29/today.tsx#L152), [line 191](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/%28tabs%29/today.tsx#L191), [line 230](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/app/%28tabs%29/today.tsx#L230).
+
+Unlike the Settings and setup confirmations, make-up, Skip and Start new Arc handlers do not use unlessLocked. The repository documents that iOS alerts float above the lock overlay. Leave a confirmation open, background/reopen, cancel unlocking, then tap the alert's confirmation: it still mutates progress.
+
+Fix: guard these alert callbacks, and verify on iOS with the lock enabled.
+
+## 6. [P2] Concurrent accounts can exceed the global AI usage cap
+
+Location: [supabase/migrations/0002_ai_quota.sql:42](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/supabase/migrations/0002_ai_quota.sql#L42).
+
+The function checks a global sum before inserting independent per-user counters. With 59 calls counted, simultaneous requests for different users can each pass the 60-call test. Their row locks do not serialize the global claim.
+
+Fix: use a shared quota row or transaction-level advisory lock around the aggregate check and claim; verify with concurrent users.
+
+## 7. [P2] Final grace-period make-up does not restore the promised point
+
+Locations: [src/state/arcStore.ts:80](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/state/arcStore.ts#L80), [src/engine/scoring.ts:92](https://github.com/Jordanlhaynes/winter-arc-app/blob/9bbd5e6ccf340f247c85f0672ac1d10bde66318e/src/engine/scoring.ts#L92).
+
+On day 101 before noon, the Arc remains open and Today offers make-up work. The store records that recovery on day 101, while scoring processes only days 1–100. The displayed "I did it (+1)" therefore does not refund a point.
+
+Fix: explicitly support recovery during that final grace period or remove the offer when it cannot count; add a boundary test.
+
+## Implemented fixes
+
+- Backup metadata checks fail closed, require reconciliation before automatic uploads, bind each queued snapshot to its original owner, and preserve delete/restore pauses. Owner/timestamp markers allow checked same-account restarts.
+- Journal callbacks, mutation responses and errors use an account generation guard. Render gates and note/log draft components are scoped to the current account.
+- The app waits for persisted lock settings before mounting private content. Storage failures show a retry screen. Today alert confirmations also obey the lock.
+- The global AI quota claim takes a transaction lock across users. The missing refund function and note timestamp trigger are applied to Supabase.
+- Final morning recovery is credited to day 100 and rejected after the cutoff.
+- Android-specific settings, branches, icons, commands and checks are removed. Shared iPhone/web framework dependencies remain.
+
+## Release evidence still needed
+
+- Native development-build compile/install and actual phone checklist.
+- Live Supabase auth, MFA, migrations/functions, RLS and multi-device sync tests.
+- Reconciliation tests with delayed/failed requests and account switches.
+
+Automated checks cover the implemented fixes but do not replace interactive login/sync or real iPhone tests. The installation log also reports dependency audit advisories, which have not yet been assessed for production applicability; do not infer dependency security from a successful build.

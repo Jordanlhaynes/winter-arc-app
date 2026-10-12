@@ -46,7 +46,10 @@ export default function Settings() {
   useFocusEffect(loadBackupInfo);
 
   useEffect(() => {
-    setAutoBackupListener(setLastBackup);
+    setAutoBackupListener((at) => {
+      setLastBackup(at);
+      setPaused(isAutoBackupPaused());
+    });
     return () => setAutoBackupListener(null);
   }, []);
 

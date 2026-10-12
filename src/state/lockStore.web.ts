@@ -4,6 +4,8 @@ import { create } from 'zustand';
 type LockState = {
   enabled: boolean;
   locked: boolean;
+  initialized: boolean;
+  initError: string | null;
   init: () => Promise<void>;
   lockIfEnabled: () => void;
   unlock: () => Promise<boolean>;
@@ -18,6 +20,8 @@ export function unlessLocked<A extends unknown[]>(fn: (...args: A) => void): (..
 export const useLockStore = create<LockState>(() => ({
   enabled: false,
   locked: false,
+  initialized: true,
+  initError: null,
   init: async () => {},
   lockIfEnabled: () => {},
   unlock: async () => true,
