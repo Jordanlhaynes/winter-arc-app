@@ -1,7 +1,12 @@
 # Winter Arc release review
 
 Reviewed source: `9bbd5e6ccf340f247c85f0672ac1d10bde66318e`, October 11, 2026 Eastern.
-Verdict: **hold release**. This is source review; runtime and native device checks are still required.
+Status: **fixes pushed; production release still held pending interactive and native verification**.
+The seven findings below are retained as the original review record. They have been addressed in code on `codex/review-and-preview` and the relevant database fixes are applied.
+
+Validation at app commit `5199d725a11d3167b1bd78913014057985e437b9`: typecheck, lint, 41 Jest tests across four suites, and web/iOS exports passed. [Validation run](https://github.com/Jordanlhaynes/winter-arc-app/actions/runs/38197436916).
+
+Supabase tests for server note timestamps, per-user quota, restricted refunds and owner/MFA policies passed in transactions that were rolled back. The existing backup's timestamp and schema version remain unchanged.
 
 ## 1. [P1] Failed or unfinished backup lookup can overwrite the cloud copy
 
@@ -61,12 +66,19 @@ On day 101 before noon, the Arc remains open and Today offers make-up work. The 
 
 Fix: explicitly support recovery during that final grace period or remove the offer when it cannot count; add a boundary test.
 
+## Implemented fixes
+
+- Backup metadata checks fail closed, require reconciliation before automatic uploads, bind each queued snapshot to its original owner, and preserve delete/restore pauses. Owner/timestamp markers allow checked same-account restarts.
+- Journal callbacks, mutation responses and errors use an account generation guard. Render gates and note/log draft components are scoped to the current account.
+- The app waits for persisted lock settings before mounting private content. Storage failures show a retry screen. Today alert confirmations also obey the lock.
+- The global AI quota claim takes a transaction lock across users. The missing refund function and note timestamp trigger are applied to Supabase.
+- Final morning recovery is credited to day 100 and rejected after the cutoff.
+- Android-specific settings, branches, icons, commands and checks are removed. Shared iPhone/web framework dependencies remain.
+
 ## Release evidence still needed
 
-- Lint and typecheck (required by AGENTS.md).
-- Jest tests and Expo web/iOS bundle export.
 - Native development-build compile/install and actual phone checklist.
 - Live Supabase auth, MFA, migrations/functions, RLS and multi-device sync tests.
 - Reconciliation tests with delayed/failed requests and account switches.
 
-Passing build checks does not resolve the source findings above or replace live/native verification.
+Automated checks cover the implemented fixes but do not replace interactive login/sync or real iPhone tests. The installation log also reports dependency audit advisories, which have not yet been assessed for production applicability; do not infer dependency security from a successful build.
