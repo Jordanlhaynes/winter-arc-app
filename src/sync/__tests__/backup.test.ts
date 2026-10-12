@@ -61,7 +61,7 @@ describe('backup races', () => {
         }),
       },
     }));
-    backup = require('../backup');
+    backup = jest.requireActual('../backup');
     authChange('INITIAL_SESSION', { user: { id: activeUser } });
   });
 
@@ -173,7 +173,7 @@ describe('backup races', () => {
   function restartWithMarker(marker: string) {
     storedMarker = marker;
     jest.resetModules();
-    backup = require('../backup');
+    backup = jest.requireActual('../backup');
     authChange('INITIAL_SESSION', { user: { id: activeUser } });
   }
 

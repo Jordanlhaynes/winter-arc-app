@@ -19,6 +19,12 @@ function formatTime(iso: string) {
 }
 
 export default function Setup() {
+  const status = useAuthStore((s) => s.status);
+  const accountId = useAuthStore((s) => s.session?.user.id ?? 'offline');
+  return <SetupForm key={`${accountId}:${status}`} />;
+}
+
+function SetupForm() {
   const startArc = useArcStore((s) => s.startArc);
   const reloadFromDb = useArcStore((s) => s.reloadFromDb);
   const authStatus = useAuthStore((s) => s.status);
@@ -40,10 +46,6 @@ export default function Setup() {
   const backup = authStatus === 'ready' && checkedCurrentAccount ? fetched : null;
 
   useEffect(() => {
-    setFetched(null);
-    setBackupChecked(false);
-    setCheckedAccountId(undefined);
-    setBackupError(null);
     if (authStatus !== 'ready') return;
     let cancelled = false;
     reconcileBackup()
@@ -149,7 +151,13 @@ export default function Setup() {
 
         <ErrorText>{backupError}</ErrorText>
         {backupError ? (
-          <Button label="Retry backup check" variant="secondary" onPress={() => setRetry((v) => v + 1)} disabled={busy} />
+          <Button label="Retry backup check" variant="secondary" onPress={() => {
+            setFetched(null);
+            setBackupChecked(false);
+            setCheckedAccountId(undefined);
+            setBackupError(null);
+            setRetry((v) => v + 1);
+          }} disabled={busy} />
         ) : null}
         <Button
           label={authStatus === 'ready' && !checkedCurrentAccount && !backupError ? 'Checking cloud backup…' : 'Start Day 1'}
