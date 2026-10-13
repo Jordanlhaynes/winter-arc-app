@@ -7,6 +7,13 @@
       "runtimeArgs": ["expo", "start", "--web", "--port", "8082"],
       "port": 8082,
       "autoPort": false
+    },
+    {
+      "name": "tunnel",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--tunnel"],
+      "port": 8081,
+      "autoPort": false
     }
   ]
 }
